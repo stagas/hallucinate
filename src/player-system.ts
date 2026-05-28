@@ -1,4 +1,4 @@
-import { characterFloor, hairPalette, jewelPalette } from './character-data.ts'
+import { characterFloor, hairPalette, jewelPalette, skinPalette } from './character-data.ts'
 import { resolvePlayerStyle } from './character-style.ts'
 import { lengthSq, mix, normalizeIndex, smoothAngle } from './math.ts'
 import {
@@ -55,6 +55,7 @@ export function createPlayers(count: number, outsideTree: CircleBounds, occupied
       bottomStyleIndex: Math.floor(seededRange(seed, 15, 0, jewelPalette.length * 2)),
       hairIndex: Math.floor(seededRange(seed, 16, 0, 19)),
       hairColorIndex: Math.floor(seededRange(seed, 17, 0, hairPalette.length)),
+      skinColorIndex: Math.floor(seededRange(seed, 19, 0, skinPalette.length)),
     }
 
     const player: Player = {

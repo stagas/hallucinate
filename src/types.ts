@@ -140,6 +140,7 @@ export type PlayerStyle = {
   bottomStyleIndex: number
   hairIndex: number
   hairColorIndex: number
+  skinColorIndex: number
 }
 
 export type ResolvedPlayerStyle = {
@@ -153,6 +154,7 @@ export type ResolvedPlayerStyle = {
   pantsLight: Vec3
   shoe: Vec3
   hairColor: Vec3
+  skinColor: Vec3
 }
 
 export type PlayerDestination = {

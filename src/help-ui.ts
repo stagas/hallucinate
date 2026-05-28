@@ -11,6 +11,7 @@ const leftRows: HelpKey[][] = [
     { keys: ['d', 'f'], label: 'dance moves' },
   ],
   [{ keys: ['z', 'x'], label: 'bottom wear' }],
+  [{ keys: ['3', '4'], label: 'skin color' }],
 ]
 
 const moveRows: HelpKey[][] = [

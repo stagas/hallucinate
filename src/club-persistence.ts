@@ -46,6 +46,7 @@ export function restoreClubState(options: {
       ?? options.styleController.topStyleIndex, jewelPalette.length * 2 + 2)
     options.styleController.bottomStyleIndex = normalizeIndex(state.bottomStyleIndex ?? state.pantsColorIndex
       ?? options.styleController.bottomStyleIndex, jewelPalette.length * 2)
+    options.styleController.skinColorIndex = state.skinColorIndex ?? options.styleController.skinColorIndex
     options.djVideoUi.times.inside = state.videoTimes?.inside ?? options.djVideoUi.times.inside
     options.djVideoUi.times.outside = state.videoTimes?.outside ?? options.djVideoUi.times.outside
     options.djVideoUi.trackIndexes.inside = state.videoTrackIndexes?.inside ?? options.djVideoUi.trackIndexes.inside
@@ -89,6 +90,7 @@ export function saveClubState(options: {
     topStyleIndex: options.styleController.topStyleIndex,
     pantsColorIndex: options.styleController.pantsColorIndex,
     bottomStyleIndex: options.styleController.bottomStyleIndex,
+    skinColorIndex: options.styleController.skinColorIndex,
     room: options.room,
     videoTimes: options.djVideoUi.times,
     videoTrackIndexes: options.djVideoUi.trackIndexes,

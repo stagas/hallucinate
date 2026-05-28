@@ -18,7 +18,7 @@ import {
   type MotionPacket,
   truncateMessage,
 } from './src/protocol.ts'
-import { hairPalette, jewelPalette } from './src/character-data.ts'
+import { hairPalette, jewelPalette, skinPalette } from './src/character-data.ts'
 import { outsideBounds, roomBounds } from './src/scene-data.ts'
 import { seatAt } from './src/scene.ts'
 import { extname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -89,6 +89,7 @@ const server = Bun.serve<SocketData>({
             bottomStyleIndex: 0,
             hairIndex: 0,
             hairColorIndex: 0,
+            skinColorIndex: 2,
           },
         },
       }
@@ -459,7 +460,8 @@ function validateMotionValues(motion: MotionPacket) {
   if (motion.style.topStyleIndex >= jewelPalette.length * 2 + 2
     || motion.style.bottomStyleIndex >= jewelPalette.length * 2
     || motion.style.hairIndex > maxHairIndex
-    || motion.style.hairColorIndex >= hairPalette.length)
+    || motion.style.hairColorIndex >= hairPalette.length
+    || motion.style.skinColorIndex >= skinPalette.length)
   {
     throw new Error('Invalid style')
   }

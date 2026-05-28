@@ -17,7 +17,7 @@ export const positionScale = 100
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 const angleScale = 256 / (Math.PI * 2)
-const spawnSize = 14
+const spawnSize = 15
 
 export type MotionPacket = {
   id?: number
@@ -83,7 +83,7 @@ export function decodeKeys(keys: number, angle: number): Vec3 {
 }
 
 export function encodeClientMotion(packet: MotionPacket) {
-  const data = new ArrayBuffer(13)
+  const data = new ArrayBuffer(14)
   const view = new DataView(data)
 
   view.setUint8(0, C_MOTION)
@@ -297,6 +297,7 @@ function writeMotion(view: DataView, offset: number, packet: MotionPacket) {
   view.setUint8(offset + 9, packet.style.bottomStyleIndex)
   view.setUint8(offset + 10, packet.style.hairIndex)
   view.setUint8(offset + 11, packet.style.hairColorIndex)
+  view.setUint8(offset + 12, packet.style.skinColorIndex)
 }
 
 function readMotion(view: DataView, offset: number): MotionPacket {
@@ -312,6 +313,7 @@ function readMotion(view: DataView, offset: number): MotionPacket {
       bottomStyleIndex: view.getUint8(offset + 9),
       hairIndex: view.getUint8(offset + 10),
       hairColorIndex: view.getUint8(offset + 11),
+      skinColorIndex: view.getUint8(offset + 12),
     },
   }
 }

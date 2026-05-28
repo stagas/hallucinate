@@ -18,6 +18,7 @@ export function bindKeyboardInput(options: {
   cycleIdle: (direction: number) => void
   cycleShirt: (direction: number) => void
   cyclePants: (direction: number) => void
+  cycleSkin: (direction: number) => void
 }) {
   addEventListener('keydown', event => {
     if (document.activeElement === options.activeInput) {
@@ -82,6 +83,16 @@ export function bindKeyboardInput(options: {
 
     if (event.key.toLowerCase() === 'x') {
       options.cyclePants(1)
+      return
+    }
+
+    if (event.key === '3') {
+      options.cycleSkin(-1)
+      return
+    }
+
+    if (event.key === '4') {
+      options.cycleSkin(1)
       return
     }
 
