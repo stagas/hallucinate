@@ -504,11 +504,11 @@ export function createMultiplayer(options: {
       queue(encodeAdminMessage({ pass, command, id }))
     },
     sendMotion,
-    sendActionsIfChanged() {
+    sendActionsIfChanged(force = false) {
       const actions = options.localActions()
       const angle = angleToProtocol(options.localActionTurn())
 
-      if (actions !== lastActions || (actions !== 0 && angle !== lastActionAngle)) {
+      if (force || actions !== lastActions || (actions !== 0 && angle !== lastActionAngle)) {
         lastActions = actions
         lastActionAngle = angle
         send(encodeClientActions({ actions, angle }))

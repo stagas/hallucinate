@@ -20,6 +20,9 @@ import {
 } from './src/graffiti.ts'
 import { photoWallThumbnailHeight, photoWallThumbnailWidth } from './src/photo-wall-data.ts'
 import {
+  ACTION_BUBBLING,
+  ACTION_FOAMING,
+  ACTION_JETPACK,
   ACTIONS,
   ADMIN,
   BEACH_BALLS,
@@ -85,6 +88,8 @@ import type { DuckPose } from './src/duck-position.ts'
 import { outsideBounds, outsideRooftop, outsideTreeStart, roomBounds, upstairsWallHeight, videoPlaylists } from './src/scene-data.ts'
 import { resolveDuckPosition, roomAt, seatAt } from './src/scene.ts'
 import type { GraffitiSplat, Vec3, VideoZone } from './src/types.ts'
+
+const allowedActionMask = ACTION_BUBBLING | ACTION_FOAMING | ACTION_JETPACK
 
 type Client = {
   id: number
@@ -524,7 +529,7 @@ const server = Bun.serve<SocketData>({
           touchInteraction(client)
           broadcast(client, encodeServerActions({
             id: client.id,
-            actions: actions.actions & 0b11,
+            actions: actions.actions & allowedActionMask,
             angle: actions.angle,
           }))
           return

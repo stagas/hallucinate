@@ -2556,7 +2556,9 @@ let lastSprayAt = 0
 let sprayPointer = 0
 let jetpackPointer = 0
 let jetpackThrust = false
+let nextJetpackNetworkSyncAt = 0
 const sprayInterval = 55
+const jetpackNetworkSyncInterval = 120
 const graffitiPaintChunk = 25
 const graffitiAppendQueue: GraffitiSplat[] = []
 let graffitiSyncSnapshot: GraffitiSnapshot | undefined
@@ -3477,7 +3479,8 @@ canvas.addEventListener('pointerdown', event => {
     // Some browsers can reject capture if the pointer is no longer active.
   }
   if (hasMultiplayer) {
-    multiplayer.sendActionsIfChanged()
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
   }
 }, { capture: true })
 
@@ -3549,7 +3552,8 @@ function stopJetpackThrust(pointerId = jetpackPointer) {
     }
   }
   if (hasMultiplayer) {
-    multiplayer.sendActionsIfChanged()
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
   }
 }
 
@@ -4347,6 +4351,11 @@ const draw = (stamp: number) => {
   localCharacter.update(delta, cameraController.turn, outsideTree, styleController.bottomMode,
     jetpackEffective, inLoft, occupiedSeats,
     seat => takeNpcSeat(npcPlayers, seat, stamp * 0.001, outsideTree, occupiedSeats))
+  if (hasMultiplayer && localJetpackActionActive() && stamp >= nextJetpackNetworkSyncAt) {
+    nextJetpackNetworkSyncAt = stamp + jetpackNetworkSyncInterval
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
+  }
   if (isAtLoftExitDoor()) {
     enterMain(true)
     scheduleFrame()
@@ -4724,7 +4733,7 @@ function emitJetpackSmoke(origin: Vec3, active: boolean) {
     ? {
       count: 4,
       growthScale: 1.2,
-      lifeScale: 0.28,
+      lifeScale: 1.4,
       originSpread: 0.045,
       radiusScale: 0.78,
       rise: -1.25,
@@ -4734,7 +4743,7 @@ function emitJetpackSmoke(origin: Vec3, active: boolean) {
     : {
       count: 1,
       growthScale: 0.7,
-      lifeScale: 0.22,
+      lifeScale: 1.1,
       originSpread: 0.025,
       radiusScale: 0.34,
       rise: -0.32,
