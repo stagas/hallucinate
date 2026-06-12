@@ -15,8 +15,8 @@ import { resolvePlayerStyle } from './character-style.ts'
 import { characterView, characterVisibilityInto } from './character-visibility.ts'
 import { raiseCigaretteArm, setCigaretteGeometry } from './cigarette.ts'
 import type { CigaretteGeometry } from './cigarette.ts'
-import { clamp, normalizeIndex } from './math.ts'
-import { roomAt } from './scene.ts'
+import { clamp, lengthSq, normalizeIndex } from './math.ts'
+import { roomAt, walkHeight, walkLoftHeight } from './scene.ts'
 import { createObjectTurnBasisCache } from './turn-basis.ts'
 import type {
   CharacterLight,
@@ -36,11 +36,13 @@ type CharacterInput = {
   position: Vec3
   turn: number
   motionBlend: number
+  input?: Vec3
   mode?: CharacterMode
   modeTime?: number
   poseUp?: Vec3
   hideHead?: boolean
   sunglasses?: boolean
+  jetpacking?: boolean
   idleClipIndex: number
   style: PlayerStyle
   resolvedStyle?: ResolvedPlayerStyle
@@ -52,6 +54,7 @@ type BuildOptions = {
   character: CharacterInput
   hairMeshes: HairMesh[]
   light: CharacterLight
+  loft?: boolean
   players: Player[]
   rig: CharacterRig
   time: number
@@ -106,6 +109,10 @@ const leftUpLegIndex = poseJointIndices.get('mixamorig:LeftUpLeg')!
 const rightUpLegIndex = poseJointIndices.get('mixamorig:RightUpLeg')!
 const leftLegIndex = poseJointIndices.get('mixamorig:LeftLeg')!
 const rightLegIndex = poseJointIndices.get('mixamorig:RightLeg')!
+const leftFootIndex = poseJointIndices.get('mixamorig:LeftFoot')!
+const rightFootIndex = poseJointIndices.get('mixamorig:RightFoot')!
+const leftToeIndex = poseJointIndices.get('mixamorig:LeftToe_End')!
+const rightToeIndex = poseJointIndices.get('mixamorig:RightToe_End')!
 const headIndex = poseJointIndices.get('mixamorig:Head')!
 const headTopIndex = poseJointIndices.get('mixamorig:HeadTop_End')!
 
@@ -159,6 +166,21 @@ const sprayCanCapA: Vec3 = [0, 0, 0]
 const sprayCanCapB: Vec3 = [0, 0, 0]
 const sprayCanNozzleA: Vec3 = [0, 0, 0]
 const sprayCanNozzleB: Vec3 = [0, 0, 0]
+const jetpackBodyA: Vec3 = [0, 0, 0]
+const jetpackBodyB: Vec3 = [0, 0, 0]
+const jetpackNozzleA: Vec3 = [0, 0, 0]
+const jetpackNozzleB: Vec3 = [0, 0, 0]
+const jetpackNozzleGlowA: Vec3 = [0, 0, 0]
+const jetpackNozzleGlowB: Vec3 = [0, 0, 0]
+const jetpackHandleA: Vec3 = [0, 0, 0]
+const jetpackHandleB: Vec3 = [0, 0, 0]
+const jetpackAxis: Vec3 = [0, 1, 0]
+const jetpackSide: Vec3 = [1, 0, 0]
+const jetpackBack: Vec3 = [0, 0, -1]
+const jetpackNozzleColor: Vec3 = [0.08, 0.085, 0.1]
+const jetpackNozzleGlow: Vec3 = [1, 0.32, 0.04]
+const jetpackHandleColor: Vec3 = [0.035, 0.04, 0.055]
+const jetpackHandleForearmEnd = 1.22
 const sunglassesA: Vec3 = [0, 0, 0]
 const sunglassesB: Vec3 = [0, 0, 0]
 const sunglassesLens: Vec3 = [0.035, 0.018, 0.01]
@@ -388,6 +410,10 @@ function addRenderedCharacter(
   if (renderAccessory && style.accessoryKind === 'cigarette') {
     raisePoseCigaretteArm(pose, turn, options.time)
   }
+  else if (renderAccessory && style.accessoryKind === 'jetpack') {
+    setJetpackArmPose(pose, turn)
+  }
+  setAirborneLegInertia(pose, player, turn, options.loft === true)
 
   for (const part of characterPartPlans) {
     if ((style.bottomMode === 'pants' || !part.part.bottom) && (!hideHead || part.toIndex !== headTopIndex)) {
@@ -409,6 +435,9 @@ function addRenderedCharacter(
     }
     else if (style.accessoryKind === 'cigarette') {
       addCigarette(target, boxInstances, pose, player, turn, style, options.light, localReflection, options.time)
+    }
+    else if (style.accessoryKind === 'jetpack') {
+      addJetpack(target, boxInstances, pose, player, turn, style, options.light, localReflection)
     }
     else {
       addSprayCan(target, boxInstances, pose, player, turn, style, options.light, localReflection)
@@ -552,7 +581,7 @@ function addGlowsticks(
   target: VertexWriter,
   boxInstances: VertexWriter,
   pose: Vec3[],
-  player: { turn: number },
+  player: { jetpacking?: boolean; turn: number },
   turn: TurnBasis,
   style: ResolvedPlayerStyle,
   light: CharacterLight,
@@ -679,6 +708,219 @@ function addSprayCanAtHand(
   sprayCanNozzleB[2] = centerZ + sideZ * handSide * 0.13
   addCharacterBox(target, boxInstances, sprayCanNozzleA, sprayCanNozzleB, 0.035, 0.035, color, 0.12, player.turn,
     localReflection, light, 0, turn.sin, turn.cos, { side: sprayCanNozzleSide })
+}
+
+function addJetpack(
+  target: VertexWriter,
+  boxInstances: VertexWriter,
+  pose: Vec3[],
+  player: { jetpacking?: boolean; turn: number },
+  turn: TurnBasis,
+  style: ResolvedPlayerStyle,
+  light: CharacterLight,
+  localReflection: boolean,
+) {
+  setJetpackReferenceBox(pose, turn)
+  addCharacterBox(target, boxInstances, jetpackBodyA, jetpackBodyB, 0.26, 0.13, style.accessory!, 0.08,
+    player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
+  addJetpackNozzle(target, boxInstances, pose, player, turn, light, localReflection, -0.075, player.jetpacking === true)
+  addJetpackNozzle(target, boxInstances, pose, player, turn, light, localReflection, 0.075, player.jetpacking === true)
+  addJetpackHandle(target, boxInstances, pose, player, turn, light, localReflection, -0.2,
+    pose[rightForeArmIndex]!, pose[rightHandIndex]!)
+  addJetpackHandle(target, boxInstances, pose, player, turn, light, localReflection, 0.2,
+    pose[leftForeArmIndex]!, pose[leftHandIndex]!)
+}
+
+function addJetpackNozzle(
+  target: VertexWriter,
+  boxInstances: VertexWriter,
+  pose: Vec3[],
+  player: { turn: number },
+  turn: TurnBasis,
+  light: CharacterLight,
+  localReflection: boolean,
+  sideOffset: number,
+  active: boolean,
+) {
+  setJetpackBoxPoint(jetpackNozzleA, sideOffset, 0.02, 0.02)
+  setJetpackBoxPoint(jetpackNozzleB, sideOffset, -0.03, 0.02)
+  addCharacterBox(target, boxInstances, jetpackNozzleA, jetpackNozzleB, 0.055, 0.06, jetpackNozzleColor, 0.18,
+    player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
+  setJetpackBoxPoint(jetpackNozzleGlowA, sideOffset, -0.025, 0.02)
+  setJetpackBoxPoint(jetpackNozzleGlowB, sideOffset, -0.055, 0.02)
+  addCharacterBox(target, boxInstances, jetpackNozzleGlowA, jetpackNozzleGlowB, 0.065, 0.07, jetpackNozzleGlow,
+    active ? 1.6 : 0.38,
+    player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
+}
+
+function addJetpackHandle(
+  target: VertexWriter,
+  boxInstances: VertexWriter,
+  pose: Vec3[],
+  player: { turn: number },
+  turn: TurnBasis,
+  light: CharacterLight,
+  localReflection: boolean,
+  sideOffset: number,
+  elbow: Vec3,
+  hand: Vec3,
+) {
+  const sideSign = Math.sign(sideOffset)
+  const endSideSpread = 0.08
+
+  setJetpackPoint(jetpackHandleA, pose, turn, sideOffset, 0.3, 0.17)
+  jetpackHandleB[0] = elbow[0]
+  jetpackHandleB[1] = elbow[1]
+  jetpackHandleB[2] = elbow[2]
+  addCharacterBox(target, boxInstances, jetpackHandleA, jetpackHandleB, 0.026, 0.026, jetpackHandleColor, 0.12,
+    player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
+
+  jetpackHandleA[0] = elbow[0]
+  jetpackHandleA[1] = elbow[1] - 0.055
+  jetpackHandleA[2] = elbow[2]
+  jetpackHandleB[0] = elbow[0] + (hand[0] - elbow[0]) * jetpackHandleForearmEnd + turn.cos * sideSign * endSideSpread
+  jetpackHandleB[1] = elbow[1] + (hand[1] - elbow[1]) * jetpackHandleForearmEnd - 0.015
+  jetpackHandleB[2] = elbow[2] + (hand[2] - elbow[2]) * jetpackHandleForearmEnd - turn.sin * sideSign * endSideSpread
+  addCharacterBox(target, boxInstances, jetpackHandleA, jetpackHandleB, 0.026, 0.026, jetpackHandleColor, 0.12,
+    player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
+}
+
+export function setPoseJetpackNozzles(left: Vec3, right: Vec3, pose: Vec3[], turn: TurnBasis) {
+  setJetpackReferenceBox(pose, turn)
+  setJetpackBoxPoint(left, -0.075, -0.055, 0.02)
+  setJetpackBoxPoint(right, 0.075, -0.055, 0.02)
+}
+
+function setJetpackReferenceBox(pose: Vec3[], turn: TurnBasis) {
+  setJetpackPoint(jetpackBodyA, pose, turn, 0, -0.34, 0.17)
+  setJetpackPoint(jetpackBodyB, pose, turn, 0, 1.1, 0.17)
+  setJetpackSide(jetpackSide, turn)
+  setJetpackFrame()
+}
+
+function setJetpackBoxPoint(target: Vec3, side: number, along: number, back: number) {
+  target[0] = jetpackBodyA[0] + jetpackAxis[0] * along + jetpackSide[0] * side + jetpackBack[0] * back
+  target[1] = jetpackBodyA[1] + jetpackAxis[1] * along + jetpackSide[1] * side + jetpackBack[1] * back
+  target[2] = jetpackBodyA[2] + jetpackAxis[2] * along + jetpackSide[2] * side + jetpackBack[2] * back
+}
+
+function setJetpackFrame() {
+  const axisX = jetpackBodyB[0] - jetpackBodyA[0]
+  const axisY = jetpackBodyB[1] - jetpackBodyA[1]
+  const axisZ = jetpackBodyB[2] - jetpackBodyA[2]
+  const axisLength = Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ)
+
+  jetpackAxis[0] = axisX / axisLength
+  jetpackAxis[1] = axisY / axisLength
+  jetpackAxis[2] = axisZ / axisLength
+
+  const sideDotAxis = jetpackSide[0] * jetpackAxis[0] + jetpackSide[1] * jetpackAxis[1]
+    + jetpackSide[2] * jetpackAxis[2]
+
+  jetpackSide[0] -= jetpackAxis[0] * sideDotAxis
+  jetpackSide[1] -= jetpackAxis[1] * sideDotAxis
+  jetpackSide[2] -= jetpackAxis[2] * sideDotAxis
+
+  const sideLength = Math.sqrt(jetpackSide[0] * jetpackSide[0] + jetpackSide[1] * jetpackSide[1]
+    + jetpackSide[2] * jetpackSide[2])
+
+  jetpackSide[0] /= sideLength
+  jetpackSide[1] /= sideLength
+  jetpackSide[2] /= sideLength
+  jetpackBack[0] = jetpackAxis[1] * jetpackSide[2] - jetpackAxis[2] * jetpackSide[1]
+  jetpackBack[1] = jetpackAxis[2] * jetpackSide[0] - jetpackAxis[0] * jetpackSide[2]
+  jetpackBack[2] = jetpackAxis[0] * jetpackSide[1] - jetpackAxis[1] * jetpackSide[0]
+}
+
+function setJetpackPoint(target: Vec3, pose: Vec3[], turn: TurnBasis, side: number, lift: number, back: number) {
+  const spine = pose[spine2Index]!
+  const neck = pose[neckIndex]!
+  const torsoX = neck[0] - spine[0]
+  const torsoY = neck[1] - spine[1]
+  const torsoZ = neck[2] - spine[2]
+  const sideX = turn.cos
+  const sideZ = -turn.sin
+  const backX = -turn.sin
+  const backZ = -turn.cos
+
+  target[0] = spine[0] + torsoX * lift + sideX * side + backX * back
+  target[1] = spine[1] + torsoY * lift
+  target[2] = spine[2] + torsoZ * lift + sideZ * side + backZ * back
+}
+
+function setJetpackSide(target: Vec3, turn: TurnBasis) {
+  target[0] = turn.cos
+  target[1] = 0
+  target[2] = -turn.sin
+}
+
+function setJetpackArmPose(pose: Vec3[], turn: TurnBasis) {
+  setJetpackArmSide(pose[leftArmIndex]!, pose[leftForeArmIndex]!, pose[leftHandIndex]!, turn, 1)
+  setJetpackArmSide(pose[rightArmIndex]!, pose[rightForeArmIndex]!, pose[rightHandIndex]!, turn, -1)
+}
+
+function setJetpackArmSide(shoulder: Vec3, elbow: Vec3, hand: Vec3, turn: TurnBasis, sign: -1 | 1) {
+  const upperLength = distance(shoulder, elbow)
+  const foreArmLength = distance(elbow, hand)
+  const sideX = turn.cos * sign
+  const sideZ = -turn.sin * sign
+  const forwardX = turn.sin
+  const forwardZ = turn.cos
+
+  elbow[0] = shoulder[0] + sideX * 0.02
+  elbow[1] = shoulder[1] - upperLength
+  elbow[2] = shoulder[2] + sideZ * 0.02
+  hand[0] = elbow[0] + forwardX * foreArmLength
+  hand[1] = elbow[1]
+  hand[2] = elbow[2] + forwardZ * foreArmLength
+}
+
+function setAirborneLegInertia(pose: Vec3[], player: CharacterInput, turn: TurnBasis, loft: boolean) {
+  if (player.mode === 'jump' || !player.input || lengthSq(player.input) === 0) {
+    return
+  }
+
+  const floorY = loft
+    ? walkLoftHeight(player.position[0], player.position[1], player.position[2])
+    : walkHeight(player.position[0], player.position[1], player.position[2])
+
+  if (player.position[1] <= floorY + 0.035) {
+    return
+  }
+
+  const backX = -turn.sin
+  const backZ = -turn.cos
+
+  setAirborneLegSide(pose[leftUpLegIndex]!, pose[leftLegIndex]!, pose[leftFootIndex]!, pose[leftToeIndex]!, backX, backZ)
+  setAirborneLegSide(pose[rightUpLegIndex]!, pose[rightLegIndex]!, pose[rightFootIndex]!, pose[rightToeIndex]!, backX,
+    backZ)
+}
+
+function setAirborneLegSide(hip: Vec3, knee: Vec3, foot: Vec3, toe: Vec3, backX: number, backZ: number) {
+  const upperLength = distance(hip, knee)
+  const lowerLength = distance(knee, foot)
+  const footLength = distance(foot, toe)
+  const kneeBack = Math.min(0.12, upperLength * 0.45)
+  const footBack = Math.min(0.18, lowerLength * 0.55)
+  const toeForward = Math.min(0.07, footLength * 0.75)
+
+  knee[0] = hip[0] + backX * kneeBack
+  knee[1] = hip[1] - Math.sqrt(Math.max(0, upperLength * upperLength - kneeBack * kneeBack))
+  knee[2] = hip[2] + backZ * kneeBack
+  foot[0] = knee[0] + backX * footBack
+  foot[1] = knee[1] - Math.sqrt(Math.max(0, lowerLength * lowerLength - footBack * footBack))
+  foot[2] = knee[2] + backZ * footBack
+  toe[0] = foot[0] - backX * toeForward
+  toe[1] = foot[1] - Math.sqrt(Math.max(0, footLength * footLength - toeForward * toeForward))
+  toe[2] = foot[2] - backZ * toeForward
+}
+
+function distance(a: Vec3, b: Vec3) {
+  const dx = b[0] - a[0]
+  const dy = b[1] - a[1]
+  const dz = b[2] - a[2]
+
+  return Math.sqrt(dx * dx + dy * dy + dz * dz)
 }
 
 export function raisePoseCigaretteArm(pose: Vec3[], turn: TurnBasis, time: number) {

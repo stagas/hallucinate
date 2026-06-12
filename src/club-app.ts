@@ -37,7 +37,7 @@ import { createMultiplayer, updateRemotePlayers } from './multiplayer.ts'
 import { createPlayers, takeNpcSeat, updatePlayers } from './player-system.ts'
 import type { ProjectedPoint, Viewport, WallProjector } from './projection.ts'
 import { createWallProjector, projectWallPointInto, projectWallPointWithMinDepthInto } from './projection.ts'
-import { ACTION_BUBBLING, ACTION_FOAMING, instagramMaxLength } from './protocol.ts'
+import { ACTION_BUBBLING, ACTION_FOAMING, ACTION_JETPACK, instagramMaxLength } from './protocol.ts'
 import type { GraffitiSnapshot, MessagePacket, VideoEndedEntry } from './protocol.ts'
 import { emojiReactionFromMessage, pickerEmojis, reactionEmojis } from './reactions.ts'
 import {
@@ -152,7 +152,7 @@ import { getDomElements } from './dom-elements.ts'
 import { createHelpUi } from './help-ui.ts'
 import { createInstagramLink } from './instagram-link.ts'
 import { createIntroEffect } from './intro-effect.ts'
-import { createLocalCharacter } from './local-character.ts'
+import { createLocalCharacter, jetpackMaxEffectiveHeight } from './local-character.ts'
 import { createMobileControls } from './mobile-controls.ts'
 import { createPhotoWallRenderer } from './photo-wall-renderer.ts'
 import type { Photo } from './photo-wall-ui.ts'
@@ -365,7 +365,10 @@ const photoWallUi = createPhotoWallUi(photoWall, {
 const scheduleWallUi = createScheduleWallUi(scheduleWall)
 const helpUi = createHelpUi()
 const helpSeen = localStorage.getItem(helpSeenKey) === 'true'
-const cameraController = createCameraController(canvas, characterPosition)
+let suppressManualCameraDrag = false
+const cameraController = createCameraController(canvas, characterPosition, {
+  suppressManualDrag: () => suppressManualCameraDrag,
+})
 let arcadeReady = true
 const arcadeUi = createArcadeUi({
   onClose: exitArcadeMode,
@@ -2480,9 +2483,26 @@ const smokeBufferCache: NumberBufferCache = { data: smokeWriter.data }
 const smokeTip: Vec3 = [0, 0, 0]
 const smokeMouth: Vec3 = [0, 0, 0]
 const smokeForward: Vec3 = [0, 0, 0]
+const jetpackLeftNozzle: Vec3 = [0, 0, 0]
+const jetpackRightNozzle: Vec3 = [0, 0, 0]
+const jetpackDown: Vec3 = [0, 0, 0]
+const jetpackSparkColors: Vec3[] = [
+  [1, 0.18, 0.02],
+  [1, 0.18, 0.02],
+  [1, 0.18, 0.02],
+  [1, 0.18, 0.02],
+  [1, 0.52, 0.04],
+  [1, 0.52, 0.04],
+  [1, 0.86, 0.12],
+]
 const smokeInterval = 900
 const smokeHeldInterval = 80
 const smokeExhaleInterval = 45
+const jetpackIdleSmokeInterval = 220
+const jetpackThrustSmokeInterval = 18
+const jetpackSparkInterval = 45
+const jetpackSputterSmokeInterval = 160
+const jetpackSputterSparkInterval = 80
 const smokeMachineIntervalMin = 120_000
 const smokeMachineIntervalMax = 420_000
 const smokeMachineSchedulePeriod = 604_800_000
@@ -2497,7 +2517,16 @@ let smokeMachineScheduleAnchor = 0
 let nextSmokeMachineBurstAt = 0
 let smokeMachineBurstUntil = 0
 let nextSmokeMachineEmitStamp = 0
-type ParticleTimers = { bubble: number; foam: number; smokeWisp: number; smokeHeld: number; smokeExhale: number }
+type ParticleTimers = {
+  bubble: number
+  foam: number
+  jetpackIdle: number
+  jetpackSpark: number
+  jetpackThrust: number
+  smokeWisp: number
+  smokeHeld: number
+  smokeExhale: number
+}
 type ParticlePlayer = {
   position: Vec3
   turn: number
@@ -2525,7 +2554,11 @@ let nextRemoteSeatSyncAt = 0
 let graffitiSeed = Math.floor(Math.random() * 65536)
 let lastSprayAt = 0
 let sprayPointer = 0
+let jetpackPointer = 0
+let jetpackThrust = false
+let nextJetpackNetworkSyncAt = 0
 const sprayInterval = 55
+const jetpackNetworkSyncInterval = 120
 const graffitiPaintChunk = 25
 const graffitiAppendQueue: GraffitiSplat[] = []
 let graffitiSyncSnapshot: GraffitiSnapshot | undefined
@@ -2537,6 +2570,14 @@ let graffitiTextureRenderPending = false
 let graffitiSnapshotMaxId = 0
 
 renderGraffitiTexture([])
+
+function localJetpackEquipped() {
+  return resolveAccessoryKind(styleController.accessoryIndex) === 'jetpack'
+}
+
+function localJetpackActionActive() {
+  return jetpackThrust && localJetpackEquipped()
+}
 
 function resetServerState() {
   predictedMessages.clear()
@@ -2564,7 +2605,8 @@ function connectMultiplayer(spaceSlug?: string) {
     localMode: () => localCharacter.mode,
     localIdleClipIndex: () => idleClipIndex,
     localSunglasses: () => sunglasses,
-    localActions: () => (bubbling ? ACTION_BUBBLING : 0) | (foaming ? ACTION_FOAMING : 0),
+    localActions: () => (bubbling ? ACTION_BUBBLING : 0) | (foaming ? ACTION_FOAMING : 0)
+      | (localJetpackActionActive() ? ACTION_JETPACK : 0),
     localActionTurn: () => cameraController.turn,
     localInstagram: () => instagram,
     localNickname: () => nickname,
@@ -3413,6 +3455,36 @@ document.addEventListener('pointerdown', event => {
 canvas.addEventListener('contextmenu', event => event.preventDefault())
 
 canvas.addEventListener('pointerdown', event => {
+  if (!introHidden || jetpackPointer !== 0) {
+    return
+  }
+
+  if (event.pointerType === 'mouse' && event.button !== 0) {
+    return
+  }
+
+  if (!localJetpackEquipped()) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  jetpackPointer = event.pointerId
+  jetpackThrust = true
+  suppressManualCameraDrag = true
+  try {
+    canvas.setPointerCapture(event.pointerId)
+  }
+  catch {
+    // Some browsers can reject capture if the pointer is no longer active.
+  }
+  if (hasMultiplayer) {
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
+  }
+}, { capture: true })
+
+canvas.addEventListener('pointerdown', event => {
   if (appSpace.kind === 'loft') {
     return
   }
@@ -3462,6 +3534,40 @@ canvas.addEventListener('pointercancel', event => {
     canvas.releasePointerCapture(event.pointerId)
   }
 }, { capture: true })
+
+function stopJetpackThrust(pointerId = jetpackPointer) {
+  if (pointerId !== jetpackPointer) {
+    return
+  }
+
+  jetpackPointer = 0
+  jetpackThrust = false
+  suppressManualCameraDrag = false
+  if (canvas.hasPointerCapture(pointerId)) {
+    try {
+      canvas.releasePointerCapture(pointerId)
+    }
+    catch {
+      // Ignore stale captures; the state above is the source of truth.
+    }
+  }
+  if (hasMultiplayer) {
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
+  }
+}
+
+for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+  canvas.addEventListener(eventName, event => {
+    stopJetpackThrust(event.pointerId)
+  }, { capture: true })
+}
+
+for (const eventName of ['pointerup', 'pointercancel'] as const) {
+  document.addEventListener(eventName, event => {
+    stopJetpackThrust(event.pointerId)
+  }, { capture: true })
+}
 
 function sprayAt(clientX: number, clientY: number) {
   if (appSpace.kind === 'loft') {
@@ -4235,8 +4341,21 @@ const draw = (stamp: number) => {
       treeSwingControl()) || treeSwingGeometryDirty
   }
 
-  localCharacter.update(delta, cameraController.turn, outsideTree, styleController.bottomMode, inLoft, occupiedSeats,
+  const jetpackEquipped = localJetpackEquipped()
+
+  if (jetpackThrust && !jetpackEquipped) {
+    stopJetpackThrust()
+  }
+  const jetpackEffective = jetpackThrust && jetpackEquipped && characterPosition[1] < jetpackMaxEffectiveHeight
+
+  localCharacter.update(delta, cameraController.turn, outsideTree, styleController.bottomMode,
+    jetpackEffective, inLoft, occupiedSeats,
     seat => takeNpcSeat(npcPlayers, seat, stamp * 0.001, outsideTree, occupiedSeats))
+  if (hasMultiplayer && localJetpackActionActive() && stamp >= nextJetpackNetworkSyncAt) {
+    nextJetpackNetworkSyncAt = stamp + jetpackNetworkSyncInterval
+    multiplayer.sendMotion()
+    multiplayer.sendActionsIfChanged(true)
+  }
   if (isAtLoftExitDoor()) {
     enterMain(true)
     scheduleFrame()
@@ -4283,10 +4402,12 @@ const draw = (stamp: number) => {
   localParticlePlayer.modeTime = localCharacter.modeTime
   localParticlePlayer.idleClipIndex = idleClipIndex
   emitPlayerParticles(localParticleSource, localParticlePlayer, stamp, bubbling, foaming,
-    introHidden && resolveAccessoryKind(styleController.accessoryIndex) === 'cigarette')
+    introHidden && resolveAccessoryKind(styleController.accessoryIndex) === 'cigarette', introHidden && jetpackEquipped,
+    localJetpackActionActive())
   for (const [id, player] of multiplayer.players) {
     emitPlayerParticles(id, player, stamp, player.bubbling ?? false, player.foaming ?? false,
-      resolveAccessoryKind(player.style.accessoryIndex) === 'cigarette')
+      resolveAccessoryKind(player.style.accessoryIndex) === 'cigarette',
+      resolveAccessoryKind(player.style.accessoryIndex) === 'jetpack', player.jetpacking ?? false)
   }
   updateSmokeMachines(stamp)
   bubbleSystem.update(delta)
@@ -4466,8 +4587,10 @@ function emitPlayerParticles(
   isBubbling: boolean,
   isFoaming: boolean,
   isSmoking: boolean,
+  hasJetpack: boolean,
+  isJetpacking: boolean,
 ) {
-  if (!isBubbling && !isFoaming && !isSmoking) {
+  if (!isBubbling && !isFoaming && !isSmoking && !hasJetpack) {
     particleTimers.delete(source)
     return
   }
@@ -4475,7 +4598,16 @@ function emitPlayerParticles(
   let timers = particleTimers.get(source)
 
   if (!timers) {
-    timers = { bubble: 0, foam: 0, smokeWisp: 0, smokeHeld: 0, smokeExhale: 0 }
+    timers = {
+      bubble: 0,
+      foam: 0,
+      jetpackIdle: 0,
+      jetpackSpark: 0,
+      jetpackThrust: 0,
+      smokeWisp: 0,
+      smokeHeld: 0,
+      smokeExhale: 0,
+    }
     particleTimers.set(source, timers)
   }
 
@@ -4538,6 +4670,102 @@ function emitPlayerParticles(
       smokeSystem.emit(smokeMouth, smokeForward, { count: 1 + Math.floor(exhale * 3), exhale: true })
     }
   }
+
+  if (hasJetpack) {
+    const time = stamp * 0.001
+
+    if (characterRenderSystem.setJetpackNozzles(player, time, jetpackLeftNozzle, jetpackRightNozzle)) {
+      if (isJetpacking) {
+        if (player.position[1] >= jetpackMaxEffectiveHeight) {
+          emitJetpackSputter(stamp, timers)
+        }
+        else {
+          emitJetpackThrust(stamp, timers)
+        }
+      }
+      else {
+        emitJetpackIdle(stamp, timers)
+      }
+    }
+  }
+}
+
+function emitJetpackIdle(stamp: number, timers: ParticleTimers) {
+  if (stamp < timers.jetpackIdle) {
+    return
+  }
+
+  timers.jetpackIdle = stamp + jetpackIdleSmokeInterval
+  emitJetpackSmoke(jetpackLeftNozzle, false)
+  emitJetpackSmoke(jetpackRightNozzle, false)
+}
+
+function emitJetpackThrust(stamp: number, timers: ParticleTimers) {
+  if (stamp >= timers.jetpackThrust) {
+    timers.jetpackThrust = stamp + jetpackThrustSmokeInterval
+    emitJetpackSmoke(jetpackLeftNozzle, true)
+    emitJetpackSmoke(jetpackRightNozzle, true)
+  }
+
+  if (stamp >= timers.jetpackSpark) {
+    timers.jetpackSpark = stamp + jetpackSparkInterval
+    emitJetpackSpark(jetpackLeftNozzle)
+    emitJetpackSpark(jetpackRightNozzle)
+  }
+}
+
+function emitJetpackSputter(stamp: number, timers: ParticleTimers) {
+  if (stamp >= timers.jetpackThrust) {
+    timers.jetpackThrust = stamp + jetpackSputterSmokeInterval
+    emitJetpackSmoke(jetpackLeftNozzle, false)
+    emitJetpackSmoke(jetpackRightNozzle, false)
+  }
+
+  if (stamp >= timers.jetpackSpark) {
+    timers.jetpackSpark = stamp + jetpackSputterSparkInterval
+    emitJetpackSpark(jetpackLeftNozzle)
+    emitJetpackSpark(jetpackRightNozzle)
+  }
+}
+
+function emitJetpackSmoke(origin: Vec3, active: boolean) {
+  smokeSystem.emit(origin, jetpackDown, active
+    ? {
+      count: 4,
+      growthScale: 1.2,
+      lifeScale: 1.4,
+      originSpread: 0.045,
+      radiusScale: 0.78,
+      rise: -1.25,
+      speed: 0,
+      velocitySpread: 0.06,
+    }
+    : {
+      count: 1,
+      growthScale: 0.7,
+      lifeScale: 1.1,
+      originSpread: 0.025,
+      radiusScale: 0.34,
+      rise: -0.32,
+      speed: 0,
+      velocitySpread: 0.025,
+    })
+}
+
+function emitJetpackSpark(origin: Vec3) {
+  smokeSystem.emit(origin, jetpackDown, {
+    colors: jetpackSparkColors,
+    count: 16,
+    glow: 2.1,
+    growthScale: 0.1,
+    lifeScale: 0.11,
+    originSpread: 0.04,
+    radiusJitter: 0.7,
+    radiusScale: 0.3,
+    rise: -2.1,
+    speed: 0,
+    velocitySpread: 0.18,
+  })
 }
 
 function updateSmokeMachines(stamp: number) {
@@ -5080,7 +5308,9 @@ const characterRenderSystem = createCharacterRenderSystem({
   gl,
   hairController,
   idleClipIndex: () => idleClipIndex,
+  jetpacking: () => localJetpackActionActive(),
   light: addLocalReflection,
+  loft: () => appSpace.kind === 'loft',
   localCharacter,
   localPoseUp,
   players: renderPlayers,

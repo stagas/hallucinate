@@ -4,6 +4,7 @@ import { lengthSq } from './math.ts'
 import {
   ACTION_BUBBLING,
   ACTION_FOAMING,
+  ACTION_JETPACK,
   ACTIONS,
   angleToProtocol,
   BEACH_BALLS,
@@ -332,6 +333,7 @@ export function createMultiplayer(options: {
         player.actionTurn = protocolToAngle(packet.angle)
         player.bubbling = (packet.actions & ACTION_BUBBLING) !== 0
         player.foaming = (packet.actions & ACTION_FOAMING) !== 0
+        player.jetpacking = (packet.actions & ACTION_JETPACK) !== 0
       }
 
       return
@@ -502,11 +504,11 @@ export function createMultiplayer(options: {
       queue(encodeAdminMessage({ pass, command, id }))
     },
     sendMotion,
-    sendActionsIfChanged() {
+    sendActionsIfChanged(force = false) {
       const actions = options.localActions()
       const angle = angleToProtocol(options.localActionTurn())
 
-      if (actions !== lastActions || (actions !== 0 && angle !== lastActionAngle)) {
+      if (force || actions !== lastActions || (actions !== 0 && angle !== lastActionAngle)) {
         lastActions = actions
         lastActionAngle = angle
         send(encodeClientActions({ actions, angle }))
