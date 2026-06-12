@@ -41,7 +41,11 @@ type CameraBasis = {
   upZ: number
 }
 
-export function createCameraController(canvas: HTMLCanvasElement, characterPosition: Vec3) {
+export function createCameraController(
+  canvas: HTMLCanvasElement,
+  characterPosition: Vec3,
+  options: { suppressManualDrag?: () => boolean } = {},
+) {
   const position: Vec3 = [-2.2, 0.15, -9.0]
   const target: Vec3 = [-2.2, -0.75, -6.8]
   const viewUp: Vec3 = [0, 1, 0]
@@ -155,7 +159,7 @@ export function createCameraController(canvas: HTMLCanvasElement, characterPosit
 
   canvas.style.touchAction = 'none'
   canvas.addEventListener('pointerdown', event => {
-    if (event.pointerType === 'mouse') {
+    if (event.pointerType === 'mouse' || options.suppressManualDrag?.()) {
       return
     }
 
@@ -224,7 +228,7 @@ export function createCameraController(canvas: HTMLCanvasElement, characterPosit
   })
 
   document.addEventListener('mousedown', event => {
-    if (freeMouse || event.button !== 0 || interactiveTarget(event.target)) {
+    if (freeMouse || event.button !== 0 || interactiveTarget(event.target) || options.suppressManualDrag?.()) {
       return
     }
 

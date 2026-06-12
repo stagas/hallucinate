@@ -9,6 +9,7 @@ import {
   buildCharacterDrawData,
   characterHeadBasisInto,
   headPoseIndex,
+  setPoseJetpackNozzles,
   setPoseCigaretteGeometry,
 } from './character-draw.ts'
 import type { CharacterDrawCache, CharacterHeadBasis } from './character-draw.ts'
@@ -51,7 +52,9 @@ export function createCharacterRenderSystem(options: {
   gl: WebGL2RenderingContext
   hairController: ReturnType<typeof createCharacterHairController>
   idleClipIndex: () => number
+  jetpacking?: () => boolean
   light: CharacterLight
+  loft?: () => boolean
   localCharacter: ReturnType<typeof createLocalCharacter>
   localPoseUp?: () => Vec3 | undefined
   players: Player[]
@@ -170,11 +173,13 @@ export function createCharacterRenderSystem(options: {
         position: options.characterPosition,
         turn: options.localCharacter.turn,
         motionBlend: options.localCharacter.motionBlend,
+        input: options.localCharacter.input,
         mode: options.localCharacter.mode,
         modeTime: options.localCharacter.modeTime,
         poseUp: options.localPoseUp?.(),
         hideHead: options.camera.firstPerson,
         sunglasses: options.sunglasses(),
+        jetpacking: options.jetpacking?.() === true,
         idleClipIndex: options.idleClipIndex(),
         style: {
           topStyleIndex: options.styleController.topStyleIndex,
@@ -188,6 +193,7 @@ export function createCharacterRenderSystem(options: {
       hairMeshes: options.hairController.meshes,
       height: options.canvas.height,
       light: options.light,
+      loft: options.loft?.() === true,
       players: renderPlayers ? options.players : [],
       rig: activeRig,
       time,
@@ -250,6 +256,18 @@ export function createCharacterRenderSystem(options: {
     return true
   }
 
+  function setJetpackNozzles(player: CigarettePoseInput, time: number, left: Vec3, right: Vec3) {
+    if (!rig) {
+      return false
+    }
+
+    const turn = cigaretteTurnBasis(player, player.turn)
+
+    setPoseJetpackNozzles(left, right, sampleCigarettePose(rig, player, time), turn)
+
+    return true
+  }
+
   function sampleCigarettePose(activeRig: CharacterRig, player: CigarettePoseInput, time: number) {
     const includeRun = player.motionBlend > 0 || player.mode === 'wave' || player.mode === 'waveOut'
 
@@ -290,6 +308,7 @@ export function createCharacterRenderSystem(options: {
     loadRemainingDancesIdle,
     setCigaretteMouth,
     setCigaretteTip,
+    setJetpackNozzles,
     update,
   }
 }

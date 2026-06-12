@@ -28,13 +28,14 @@ export const DUCK_POSITION = 24
 
 export const ACTION_BUBBLING = 1
 export const ACTION_FOAMING = 2
+export const ACTION_JETPACK = 4
 
 export const roomCount = 4
 export const messageMaxLength = 120
 export const instagramMaxLength = 30
 export const nicknameMaxLength = 32
 export const positionScale = 100
-export const protocolVersion = 53
+export const protocolVersion = 54
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()

@@ -20,6 +20,9 @@ const waveDuration = 95 / 30
 const waveLoopStart = 28 / 30
 const waveLoopEnd = 62 / 30
 const breakdanceDuration = 201 / 30
+const jetpackAcceleration = 10
+const jetpackMaxVerticalSpeed = 2.8
+export const jetpackMaxEffectiveHeight = characterFloor + (outsideRooftop.height + upstairsWallHeight) * 0.5
 
 export function createLocalCharacter(keys: Set<string>) {
   const position: Vec3 = [-2.2, -1.95, -6.8]
@@ -200,6 +203,7 @@ export function createLocalCharacter(keys: Set<string>) {
       cameraTurn: number,
       outsideTree: CircleBounds,
       bottomMode: BottomMode,
+      jetpackThrust: boolean,
       loft: boolean,
       occupiedSeats: Set<string>,
       takeSeat: (seat: Seat) => void,
@@ -364,7 +368,8 @@ export function createLocalCharacter(keys: Set<string>) {
       }
 
       const jumping = wasJumping || jumpTime > 0
-      const collisionOptions = jumping ? { couches: false, duck: false } : { duck: false }
+      const thrusting = jetpackThrust && !jumping && mode !== 'breakdance'
+      const collisionOptions = jumping || thrusting ? { couches: false, duck: false } : { duck: false }
       const previousPosition: Vec3 = [position[0], position[1], position[2]]
 
       if (jumping) {
@@ -401,7 +406,9 @@ export function createLocalCharacter(keys: Set<string>) {
 
         position[0] += direction[0] * delta * 5
         position[2] += direction[2] * delta * 5
-        const foundSeat = !jumping && couchRelease <= 0 ? seatAt(position, occupiedSeats, 0.46, true, loft) : undefined
+        const foundSeat = !jumping && !thrusting && couchRelease <= 0
+          ? seatAt(position, occupiedSeats, 0.46, true, loft)
+          : undefined
         const nextSeat = foundSeat && (!hasDestination || foundSeat.id === destinationSeat) ? foundSeat : undefined
 
         if (nextSeat) {
@@ -446,12 +453,20 @@ export function createLocalCharacter(keys: Set<string>) {
         velocityY = 0
       }
       else {
-        velocityY -= 12 * delta
+        velocityY = thrusting
+          ? Math.min(jetpackMaxVerticalSpeed, velocityY + jetpackAcceleration * delta)
+          : velocityY - 12 * delta
         position[1] += velocityY * delta
 
         if (position[1] < floorY) {
           position[1] = floorY
           velocityY = 0
+        }
+      }
+      if (!jumping && position[1] > floorY + 0.02) {
+        motionBlend = 0
+        if (mode === 'run') {
+          mode = 'stand'
         }
       }
 
