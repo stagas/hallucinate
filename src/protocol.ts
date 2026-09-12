@@ -28,6 +28,7 @@ export const DUCK_POSITION = 24
 
 export const ACTION_BUBBLING = 1
 export const ACTION_FOAMING = 2
+export const ACTION_JETPACK = 4
 
 export const roomCount = 4
 export const messageMaxLength = 120

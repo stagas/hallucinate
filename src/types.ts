@@ -178,7 +178,7 @@ export type ResolvedPlayerStyle = {
   hairColor: Vec3
   skin: Vec3
   accessory?: Vec3
-  accessoryKind?: 'glowstick' | 'spray' | 'cigarette'
+  accessoryKind?: 'glowstick' | 'spray' | 'cigarette' | 'jetpack'
 }
 
 export type PlayerDestination = {
@@ -225,6 +225,7 @@ export type Player = {
   sunglasses?: boolean
   bubbling?: boolean
   foaming?: boolean
+  jetpacking?: boolean
   actionTurn?: number
 }
 

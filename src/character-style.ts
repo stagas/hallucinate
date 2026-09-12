@@ -19,7 +19,10 @@ export const sprayColors: Vec3[] = graffitiColors
 export const cigaretteColors: Vec3[] = [
   [0.96, 0.96, 0.92],
 ]
-export const accessoryPalette: Vec3[] = [...glowstickColors, ...sprayColors, ...cigaretteColors]
+export const jetpackColors: Vec3[] = [
+  [0.23, 0.25, 0.3],
+]
+export const accessoryPalette: Vec3[] = [...glowstickColors, ...sprayColors, ...cigaretteColors, ...jetpackColors]
 
 export function resolveAccessoryKind(accessoryIndex: number): ResolvedPlayerStyle['accessoryKind'] {
   const index = normalizeIndex(accessoryIndex, accessoryPalette.length + 1)
@@ -30,7 +33,9 @@ export function resolveAccessoryKind(accessoryIndex: number): ResolvedPlayerStyl
     ? 'glowstick'
     : index <= glowstickColors.length + sprayColors.length
     ? 'spray'
-    : 'cigarette'
+    : index <= glowstickColors.length + sprayColors.length + cigaretteColors.length
+    ? 'cigarette'
+    : 'jetpack'
 }
 
 export function createCharacterStyleController() {

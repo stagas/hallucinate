@@ -44,7 +44,7 @@ const alternativeLeftRows: HelpKey[][] = [
 const actionRow: HelpKey[] = [
   { keys: ['c'], label: 'bubbles' },
   { keys: ['v'], label: 'wave' },
-  { keys: ['b'], label: 'bounce' },
+  { keys: ['b'], label: 'bounce / jetpack' },
   { keys: ['n'], label: 'foam' },
 ]
 const moveRows: HelpKey[][] = [

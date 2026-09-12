@@ -6,8 +6,10 @@ import type { Vec3 } from './types.ts'
 export type SmokePuff = {
   position: Vec3
   velocity: Vec3
+  color: Vec3
   baseRadius: number
   growth: number
+  glow: number
   radius: number
   life: number
   maxLife: number
@@ -15,10 +17,14 @@ export type SmokePuff = {
 
 export type SmokeEmitOptions = {
   count: number
+  color?: Vec3
+  colors?: Vec3[]
   exhale?: boolean
+  glow?: number
   growthScale?: number
   lifeScale?: number
   originSpread?: number
+  radiusJitter?: number
   radiusScale?: number
   rise?: number
   speed?: number
@@ -45,8 +51,10 @@ function createPuff(): SmokePuff {
   return {
     position: [0, 0, 0],
     velocity: [0, 0, 0],
+      color: [0, 0, 0],
     baseRadius: 0,
     growth: 0,
+      glow: puffGlow,
     radius: 0,
     life: 0,
     maxLife: 0,
@@ -63,12 +71,17 @@ export function createSmokeSystem() {
     const velocitySpread = options.velocitySpread ?? drift
     const push = options.speed ?? (exhale ? 0.9 : 0.2)
     const radiusScale = options.radiusScale ?? 1
+    const radiusJitter = options.radiusJitter ?? 0
     const lift = options.rise ?? rise
     const lifeScale = options.lifeScale ?? 1
     const growthScale = options.growthScale ?? 1
+    const colors = options.colors
+    const color = options.color ?? smokeColor
+    const glow = options.glow ?? puffGlow
 
     for (let i = 0; i < options.count; i++) {
       const puff = pool.pop() ?? createPuff()
+      const nextColor = colors ? colors[Math.floor(random() * colors.length)]! : color
 
       puff.position[0] = origin[0] + (random() - 0.5) * spread
       puff.position[1] = origin[1] + (random() - 0.5) * spread
@@ -76,8 +89,12 @@ export function createSmokeSystem() {
       puff.velocity[0] = forward[0] * push + (random() - 0.5) * velocitySpread
       puff.velocity[1] = lift * (0.7 + random() * 0.6)
       puff.velocity[2] = forward[2] * push + (random() - 0.5) * velocitySpread
-      puff.baseRadius = (exhale ? puffRadius : wispRadius) * radiusScale
+      puff.color[0] = nextColor[0]
+      puff.color[1] = nextColor[1]
+      puff.color[2] = nextColor[2]
+      puff.baseRadius = (exhale ? puffRadius : wispRadius) * radiusScale * (1 + (random() - 0.5) * radiusJitter)
       puff.growth = growth * growthScale
+      puff.glow = glow
       puff.radius = puff.baseRadius
       puff.maxLife = (minLife + random() * (maxLife - minLife)) * lifeScale
       puff.life = puff.maxLife
@@ -124,7 +141,7 @@ export function writeSmokeGeometry(target: VertexWriter, puffs: SmokePuff[]) {
   reserveSphereFloats(target, unitSphere, puffs.length)
 
   for (const puff of puffs) {
-    writeSphere(target, unitSphere, puff.position[0], puff.position[1], puff.position[2], puff.radius, smokeColor,
-      puffGlow)
+    writeSphere(target, unitSphere, puff.position[0], puff.position[1], puff.position[2], puff.radius, puff.color,
+      puff.glow)
   }
 }
