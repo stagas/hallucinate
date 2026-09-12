@@ -261,9 +261,7 @@ export function createCharacterRenderSystem(options: {
       return false
     }
 
-    const turn = cigaretteTurnBasis(player, player.turn)
-
-    setPoseJetpackNozzles(left, right, sampleCigarettePose(rig, player, time), turn)
+    setPoseJetpackNozzles(left, right, sampleCigarettePose(rig, player, time))
 
     return true
   }

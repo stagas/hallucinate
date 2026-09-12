@@ -45,6 +45,9 @@ export function bindKeyboardInput(options: {
   toggleHelp: () => void
   startJumping: () => void
   stopJumping: () => void
+  jetpackActive: () => boolean
+  startJetpackThrust: () => void
+  stopJetpackThrust: () => void
   startWave: () => void
   stopWave: () => void
   startBubbles: () => void
@@ -63,6 +66,8 @@ export function bindKeyboardInput(options: {
   toggleCameraControl: () => void
   toggleView: () => void
 }) {
+  let bThrusting = false
+
   window.addEventListener('keydown', event => {
     if (options.activeInputs.includes(document.activeElement as HTMLInputElement)) {
       return
@@ -96,7 +101,13 @@ export function bindKeyboardInput(options: {
       }
 
       options.keys.add(key)
-      options.startJumping()
+      bThrusting = options.jetpackActive()
+      if (bThrusting) {
+        options.startJetpackThrust()
+      }
+      else {
+        options.startJumping()
+      }
       return
     }
 
@@ -249,7 +260,13 @@ export function bindKeyboardInput(options: {
     }
 
     if (key === 'b') {
-      options.stopJumping()
+      if (bThrusting) {
+        options.stopJetpackThrust()
+      }
+      else {
+        options.stopJumping()
+      }
+      bThrusting = false
     }
 
     options.keys.delete(key)

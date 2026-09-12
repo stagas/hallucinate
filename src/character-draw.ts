@@ -720,7 +720,7 @@ function addJetpack(
   light: CharacterLight,
   localReflection: boolean,
 ) {
-  setJetpackReferenceBox(pose, turn)
+  setJetpackReferenceBox(pose)
   addCharacterBox(target, boxInstances, jetpackBodyA, jetpackBodyB, 0.26, 0.13, style.accessory!, 0.08,
     player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
   addJetpackNozzle(target, boxInstances, pose, player, turn, light, localReflection, -0.075, player.jetpacking === true)
@@ -768,7 +768,7 @@ function addJetpackHandle(
   const sideSign = Math.sign(sideOffset)
   const endSideSpread = 0.08
 
-  setJetpackPoint(jetpackHandleA, pose, turn, sideOffset, 0.3, 0.17)
+  setJetpackPoint(jetpackHandleA, pose, sideOffset, 0.3, 0.17)
   jetpackHandleB[0] = elbow[0]
   jetpackHandleB[1] = elbow[1]
   jetpackHandleB[2] = elbow[2]
@@ -785,17 +785,16 @@ function addJetpackHandle(
     player.turn, localReflection, light, 0, turn.sin, turn.cos, { side: jetpackSide })
 }
 
-export function setPoseJetpackNozzles(left: Vec3, right: Vec3, pose: Vec3[], turn: TurnBasis) {
-  setJetpackReferenceBox(pose, turn)
+export function setPoseJetpackNozzles(left: Vec3, right: Vec3, pose: Vec3[]) {
+  setJetpackReferenceBox(pose)
   setJetpackBoxPoint(left, -0.075, -0.055, 0.02)
   setJetpackBoxPoint(right, 0.075, -0.055, 0.02)
 }
 
-function setJetpackReferenceBox(pose: Vec3[], turn: TurnBasis) {
-  setJetpackPoint(jetpackBodyA, pose, turn, 0, -0.34, 0.17)
-  setJetpackPoint(jetpackBodyB, pose, turn, 0, 1.1, 0.17)
-  setJetpackSide(jetpackSide, turn)
-  setJetpackFrame()
+function setJetpackReferenceBox(pose: Vec3[]) {
+  setJetpackFrame(pose)
+  setJetpackPoint(jetpackBodyA, pose, 0, -0.34, 0.17)
+  setJetpackPoint(jetpackBodyB, pose, 0, 1.1, 0.17)
 }
 
 function setJetpackBoxPoint(target: Vec3, side: number, along: number, back: number) {
@@ -804,22 +803,28 @@ function setJetpackBoxPoint(target: Vec3, side: number, along: number, back: num
   target[2] = jetpackBodyA[2] + jetpackAxis[2] * along + jetpackSide[2] * side + jetpackBack[2] * back
 }
 
-function setJetpackFrame() {
-  const axisX = jetpackBodyB[0] - jetpackBodyA[0]
-  const axisY = jetpackBodyB[1] - jetpackBodyA[1]
-  const axisZ = jetpackBodyB[2] - jetpackBodyA[2]
+function setJetpackFrame(pose: Vec3[]) {
+  const spine = pose[spine2Index]!
+  const neck = pose[neckIndex]!
+  const leftArm = pose[leftArmIndex]!
+  const rightArm = pose[rightArmIndex]!
+  const axisX = neck[0] - spine[0]
+  const axisY = neck[1] - spine[1]
+  const axisZ = neck[2] - spine[2]
   const axisLength = Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ)
 
   jetpackAxis[0] = axisX / axisLength
   jetpackAxis[1] = axisY / axisLength
   jetpackAxis[2] = axisZ / axisLength
 
-  const sideDotAxis = jetpackSide[0] * jetpackAxis[0] + jetpackSide[1] * jetpackAxis[1]
-    + jetpackSide[2] * jetpackAxis[2]
+  const sideX = leftArm[0] - rightArm[0]
+  const sideY = leftArm[1] - rightArm[1]
+  const sideZ = leftArm[2] - rightArm[2]
+  const sideDotAxis = sideX * jetpackAxis[0] + sideY * jetpackAxis[1] + sideZ * jetpackAxis[2]
 
-  jetpackSide[0] -= jetpackAxis[0] * sideDotAxis
-  jetpackSide[1] -= jetpackAxis[1] * sideDotAxis
-  jetpackSide[2] -= jetpackAxis[2] * sideDotAxis
+  jetpackSide[0] = sideX - jetpackAxis[0] * sideDotAxis
+  jetpackSide[1] = sideY - jetpackAxis[1] * sideDotAxis
+  jetpackSide[2] = sideZ - jetpackAxis[2] * sideDotAxis
 
   const sideLength = Math.sqrt(jetpackSide[0] * jetpackSide[0] + jetpackSide[1] * jetpackSide[1]
     + jetpackSide[2] * jetpackSide[2])
@@ -832,26 +837,16 @@ function setJetpackFrame() {
   jetpackBack[2] = jetpackAxis[0] * jetpackSide[1] - jetpackAxis[1] * jetpackSide[0]
 }
 
-function setJetpackPoint(target: Vec3, pose: Vec3[], turn: TurnBasis, side: number, lift: number, back: number) {
+function setJetpackPoint(target: Vec3, pose: Vec3[], side: number, lift: number, back: number) {
   const spine = pose[spine2Index]!
   const neck = pose[neckIndex]!
   const torsoX = neck[0] - spine[0]
   const torsoY = neck[1] - spine[1]
   const torsoZ = neck[2] - spine[2]
-  const sideX = turn.cos
-  const sideZ = -turn.sin
-  const backX = -turn.sin
-  const backZ = -turn.cos
 
-  target[0] = spine[0] + torsoX * lift + sideX * side + backX * back
-  target[1] = spine[1] + torsoY * lift
-  target[2] = spine[2] + torsoZ * lift + sideZ * side + backZ * back
-}
-
-function setJetpackSide(target: Vec3, turn: TurnBasis) {
-  target[0] = turn.cos
-  target[1] = 0
-  target[2] = -turn.sin
+  target[0] = spine[0] + torsoX * lift + jetpackSide[0] * side + jetpackBack[0] * back
+  target[1] = spine[1] + torsoY * lift + jetpackSide[1] * side + jetpackBack[1] * back
+  target[2] = spine[2] + torsoZ * lift + jetpackSide[2] * side + jetpackBack[2] * back
 }
 
 function setJetpackArmPose(pose: Vec3[], turn: TurnBasis) {

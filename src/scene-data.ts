@@ -87,6 +87,9 @@ export const outsideTreeSwing = {
 }
 export const outsideHut: Bounds = { x: -18, z: 20.5, width: 6.2, depth: 5 }
 export const outsideHutDeckHeight = 0.32
+export const outsideHutRoofEave = 0.48
+export const outsideHutRoofBottom = characterFloor + outsideHutDeckHeight + 2.53
+export const outsideHutRoofRidge = characterFloor + outsideHutDeckHeight + 3.8
 export const outsideHutBar: Bounds = {
   x: outsideHut.x - outsideHut.width / 2 + 1.75,
   z: outsideHut.z,
@@ -249,6 +252,8 @@ export const outsideRooftopLanding: Bounds & { height: number } = {
   height: outsideRooftop.height,
 }
 export const upstairsWallHeight = 4.25
+export const upstairsRoofThickness = 0.08
+export const upstairsRoofHeight = characterFloor + outsideRooftop.height + upstairsWallHeight + upstairsRoofThickness
 export const upstairsDoor = {
   x: roomBounds.left,
   z: outsideRooftopStairs.z - outsideRooftopStairs.depth / 2,

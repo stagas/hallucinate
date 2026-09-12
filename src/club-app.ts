@@ -365,10 +365,7 @@ const photoWallUi = createPhotoWallUi(photoWall, {
 const scheduleWallUi = createScheduleWallUi(scheduleWall)
 const helpUi = createHelpUi()
 const helpSeen = localStorage.getItem(helpSeenKey) === 'true'
-let suppressManualCameraDrag = false
-const cameraController = createCameraController(canvas, characterPosition, {
-  suppressManualDrag: () => suppressManualCameraDrag,
-})
+const cameraController = createCameraController(canvas, characterPosition)
 let arcadeReady = true
 const arcadeUi = createArcadeUi({
   onClose: exitArcadeMode,
@@ -2554,7 +2551,6 @@ let nextRemoteSeatSyncAt = 0
 let graffitiSeed = Math.floor(Math.random() * 65536)
 let lastSprayAt = 0
 let sprayPointer = 0
-let jetpackPointer = 0
 let jetpackThrust = false
 let nextJetpackNetworkSyncAt = 0
 const sprayInterval = 55
@@ -3375,6 +3371,9 @@ bindKeyboardInput({
   keys,
   startJumping: () => localCharacter.startJumping(),
   stopJumping: () => localCharacter.stopJumping(),
+  jetpackActive: localJetpackEquipped,
+  startJetpackThrust: () => setJetpackThrust(true),
+  stopJetpackThrust: () => setJetpackThrust(false),
   startWave: () => localCharacter.startWave(),
   stopWave: () => localCharacter.stopWave(),
   startBubbles: () => {
@@ -3455,36 +3454,6 @@ document.addEventListener('pointerdown', event => {
 canvas.addEventListener('contextmenu', event => event.preventDefault())
 
 canvas.addEventListener('pointerdown', event => {
-  if (!introHidden || jetpackPointer !== 0) {
-    return
-  }
-
-  if (event.pointerType === 'mouse' && event.button !== 0) {
-    return
-  }
-
-  if (!localJetpackEquipped()) {
-    return
-  }
-
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  jetpackPointer = event.pointerId
-  jetpackThrust = true
-  suppressManualCameraDrag = true
-  try {
-    canvas.setPointerCapture(event.pointerId)
-  }
-  catch {
-    // Some browsers can reject capture if the pointer is no longer active.
-  }
-  if (hasMultiplayer) {
-    multiplayer.sendMotion()
-    multiplayer.sendActionsIfChanged(true)
-  }
-}, { capture: true })
-
-canvas.addEventListener('pointerdown', event => {
   if (appSpace.kind === 'loft') {
     return
   }
@@ -3535,38 +3504,12 @@ canvas.addEventListener('pointercancel', event => {
   }
 }, { capture: true })
 
-function stopJetpackThrust(pointerId = jetpackPointer) {
-  if (pointerId !== jetpackPointer) {
-    return
-  }
-
-  jetpackPointer = 0
-  jetpackThrust = false
-  suppressManualCameraDrag = false
-  if (canvas.hasPointerCapture(pointerId)) {
-    try {
-      canvas.releasePointerCapture(pointerId)
-    }
-    catch {
-      // Ignore stale captures; the state above is the source of truth.
-    }
-  }
+function setJetpackThrust(active: boolean) {
+  jetpackThrust = active
   if (hasMultiplayer) {
     multiplayer.sendMotion()
     multiplayer.sendActionsIfChanged(true)
   }
-}
-
-for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
-  canvas.addEventListener(eventName, event => {
-    stopJetpackThrust(event.pointerId)
-  }, { capture: true })
-}
-
-for (const eventName of ['pointerup', 'pointercancel'] as const) {
-  document.addEventListener(eventName, event => {
-    stopJetpackThrust(event.pointerId)
-  }, { capture: true })
 }
 
 function sprayAt(clientX: number, clientY: number) {
@@ -4344,7 +4287,7 @@ const draw = (stamp: number) => {
   const jetpackEquipped = localJetpackEquipped()
 
   if (jetpackThrust && !jetpackEquipped) {
-    stopJetpackThrust()
+    setJetpackThrust(false)
   }
   const jetpackEffective = jetpackThrust && jetpackEquipped && characterPosition[1] < jetpackMaxEffectiveHeight
 

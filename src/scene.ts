@@ -24,6 +24,9 @@ import {
   outsideHutBar,
   outsideHutBarStools,
   outsideHutDeckHeight,
+  outsideHutRoofBottom,
+  outsideHutRoofEave,
+  outsideHutRoofRidge,
   outsidePalmTree,
   outsidePhotoWall,
   outsideRooftop,
@@ -53,6 +56,7 @@ import {
   upstairsDjBooth,
   upstairsDjSpeakers,
   upstairsDoor,
+  upstairsRoofHeight,
 } from './scene-data.ts'
 import { treeSwingSeatAt, treeSwingSeats } from './tree-swing.ts'
 import type { Bounds, CircleBounds, Vec3, VideoZone } from './types.ts'
@@ -182,6 +186,10 @@ const outsideRooftopLandingTransitionPadding = outsideRooftopLanding.x + outside
 const emptySeats = new Set<string>()
 
 export function walkHeight(x: number, y: number, z: number) {
+  if (inBoundsInclusive(x, z, outsideRooftop) && y > upstairsRoofHeight - platformStep) {
+    return upstairsRoofHeight
+  }
+
   const upstairsPlatform = upstairsPlatformHeight(x, z)
 
   if (upstairsPlatform !== undefined && y > upstairsPlatform - platformStep) {
@@ -198,6 +206,12 @@ export function walkHeight(x: number, y: number, z: number) {
 
   if (stairs !== undefined && y > stairs - platformStep) {
     return stairs
+  }
+
+  const hutRoof = outsideHutRoofHeight(x, z)
+
+  if (hutRoof !== undefined && y > hutRoof - platformStep) {
+    return hutRoof
   }
 
   const duckTop = duckPlatformHeight(x, z)
@@ -217,6 +231,19 @@ export function walkHeight(x: number, y: number, z: number) {
   }
 
   return characterFloor
+}
+
+export function outsideHutRoofHeight(x: number, z: number) {
+  const halfWidth = outsideHut.width / 2 + outsideHutRoofEave
+  const halfDepth = outsideHut.depth / 2 + outsideHutRoofEave
+  const localX = Math.abs(x - outsideHut.x)
+  const localZ = Math.abs(z - outsideHut.z)
+
+  if (localX >= halfWidth || localZ >= halfDepth) {
+    return undefined
+  }
+
+  return outsideHutRoofBottom + (outsideHutRoofRidge - outsideHutRoofBottom) * (1 - localZ / halfDepth)
 }
 
 export function walkLoftHeight(x: number, y: number, z: number, options?: HeightOptions) {
@@ -254,6 +281,7 @@ export function isOutside(position: Vec3) {
 
 export function isUpstairs(position: Vec3) {
   return position[1] > outsideRooftopTop - platformStep
+    && position[1] <= upstairsRoofHeight - platformStep
     && inBoundsInclusive(position[0], position[2], outsideRooftop)
 }
 
@@ -278,7 +306,22 @@ export function collideRoom(
   previous?: Vec3,
   options?: CollisionOptions,
 ) {
-  if (isUpstairs(position) || (previous !== undefined && isUpstairs(previous))) {
+  if (onUpstairsRoof(position) || (previous !== undefined && onUpstairsRoof(previous))) {
+    position[0] = clamp(position[0], outsideBounds.left, outsideBounds.right)
+    position[2] = clamp(position[2], outsideBounds.back, outsideBounds.front)
+    return
+  }
+
+  const upstairs = isUpstairs(position)
+  const wasUpstairs = previous !== undefined && isUpstairs(previous)
+
+  if (upstairs && position[1] <= upstairsRoofHeight - platformStep && previous !== undefined && !wasUpstairs
+    && !(previous[0] < roomBounds.left && isAtUpstairsDoor(position[2], 0.45)))
+  {
+    collidePaddedBounds(position, paddedBounds(outsideRooftop, 0.45))
+  }
+
+  if (isUpstairs(position) || wasUpstairs) {
     collideUpstairsRoom(position)
     collideDuck(position)
     return
@@ -389,6 +432,10 @@ export function collideRoom(
 }
 
 function collideUpstairsRoom(position: Vec3) {
+  if (position[1] > upstairsRoofHeight - platformStep) {
+    return
+  }
+
   const padding = 0.45
   const left = roomBounds.left + padding
   const right = roomBounds.right - padding
@@ -973,6 +1020,10 @@ function distanceSq(a: Vec3, b: Vec3) {
 }
 
 export function collideBuildingWalls(position: Vec3, padding: number) {
+  if (position[1] > upstairsRoofHeight - platformStep) {
+    return
+  }
+
   const left = roomBounds.left - padding
   const right = roomBounds.right + padding
   const back = roomBounds.back - padding
@@ -1199,6 +1250,11 @@ function onOutsideRooftopPath(position: Vec3) {
     || ((inBoundsInclusive(position[0], position[2], outsideRooftop)
       || inBoundsInclusive(position[0], position[2], outsideRooftopLanding))
       && position[1] > outsideRooftopTop - platformStep)
+}
+
+function onUpstairsRoof(position: Vec3) {
+  return position[1] > upstairsRoofHeight - platformStep
+    && inBoundsInclusive(position[0], position[2], outsideRooftop)
 }
 
 function collideOutsideRooftopPath(position: Vec3, previous?: Vec3) {

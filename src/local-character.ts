@@ -6,8 +6,8 @@ import {
   smoothAngle,
 } from './math.ts'
 import { findPath } from './pathfinding.ts'
-import { outsideRooftop, upstairsWallHeight } from './scene-data.ts'
-import { collideLoftRoom, collideRoom, isOutside, roomAt, seatAt, seatById, walkHeight,
+import { outsideRooftop, upstairsRoofHeight, upstairsWallHeight } from './scene-data.ts'
+import { collideLoftRoom, collideRoom, isOutside, outsideHutRoofHeight, roomAt, seatAt, seatById, walkHeight,
   walkLoftHeight } from './scene.ts'
 import type { Seat } from './scene.ts'
 import { createTurnBasisCache } from './turn-basis.ts'
@@ -22,7 +22,8 @@ const waveLoopEnd = 62 / 30
 const breakdanceDuration = 201 / 30
 const jetpackAcceleration = 10
 const jetpackMaxVerticalSpeed = 2.8
-export const jetpackMaxEffectiveHeight = characterFloor + (outsideRooftop.height + upstairsWallHeight) * 0.5
+const characterCeilingClearance = 1.45
+export const jetpackMaxEffectiveHeight = upstairsRoofHeight + upstairsWallHeight
 
 export function createLocalCharacter(keys: Set<string>) {
   const position: Vec3 = [-2.2, -1.95, -6.8]
@@ -406,10 +407,16 @@ export function createLocalCharacter(keys: Set<string>) {
 
         position[0] += direction[0] * delta * 5
         position[2] += direction[2] * delta * 5
-        const foundSeat = !jumping && !thrusting && couchRelease <= 0
+        const seatFloorY = loft
+          ? walkLoftHeight(position[0], position[1], position[2], collisionOptions)
+          : walkHeight(position[0], position[1], position[2])
+        const grounded = position[1] <= seatFloorY + 0.02
+        const seatsActive = loft || seatFloorY < upstairsRoofHeight
+        const foundSeat = seatsActive && grounded && !jumping && !thrusting && couchRelease <= 0
           ? seatAt(position, occupiedSeats, 0.46, true, loft)
           : undefined
-        const nextSeat = foundSeat && (!hasDestination || foundSeat.id === destinationSeat) ? foundSeat : undefined
+        const nextSeat = foundSeat && Math.abs(foundSeat.position[1] - position[1]) < 0.8
+          && (!hasDestination || foundSeat.id === destinationSeat) ? foundSeat : undefined
 
         if (nextSeat) {
           takeSeat(nextSeat)
@@ -458,6 +465,16 @@ export function createLocalCharacter(keys: Set<string>) {
           : velocityY - 12 * delta
         position[1] += velocityY * delta
 
+        const hutRoof = loft ? undefined : outsideHutRoofHeight(position[0], position[2])
+        const hutCeiling = hutRoof === undefined ? undefined : hutRoof - characterCeilingClearance
+
+        if (hutRoof !== undefined && hutCeiling !== undefined && velocityY > 0
+          && position[1] > hutCeiling && position[1] < hutRoof)
+        {
+          position[1] = hutCeiling
+          velocityY = 0
+        }
+
         if (position[1] < floorY) {
           position[1] = floorY
           velocityY = 0
@@ -495,7 +512,7 @@ function jumpY(floorY: number, elapsed: number, position: Vec3, loft: boolean) {
     return y
   }
 
-  return Math.min(y, characterFloor + outsideRooftop.height + upstairsWallHeight - 1.45)
+  return Math.min(y, characterFloor + outsideRooftop.height + upstairsWallHeight - characterCeilingClearance)
 }
 
 function waypointReached(position: Vec3, waypoint: Vec3) {

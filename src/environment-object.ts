@@ -5,12 +5,13 @@ import { tShirtLogoTextureBounds } from './graffiti.ts'
 import { add, mix, scale, subtract } from './math.ts'
 import { backDoor, bartenderBar, bartenderStools, djBooth, djSpeakers, insideSideLightZs, landscapeBounds,
   outsideBounds, outsideCouches, outsideDjBooth, outsideDjSpeakers, outsideHut, outsideHutBar, outsideHutBarStools,
-  outsideHutDeckHeight, outsidePhotoWall, outsideRooftop, outsideRooftopLanding, outsideRooftopStairRiseAtZ,
+  outsideHutDeckHeight, outsideHutRoofBottom, outsideHutRoofEave, outsideHutRoofRidge, outsidePhotoWall,
+  outsideRooftop, outsideRooftopLanding, outsideRooftopStairRiseAtZ,
   outsideRooftopStairs, outsideScheduleWall, outsideStage, outsideToiletDoor, outsideToilets, outsideTShirtStands,
   outsideVideoScreenWall, roomBounds, tent, tentCenterBench, tentDjBooth, tentDjSpeakers, tentDoor, tentDoorAngle,
   tentPole, tentVideoAngle, tentVideoWall, type TShirtStand, upstairsBar, upstairsBarCounterRail,
   upstairsBarDrinkCounter, upstairsBarStools, upstairsCouches, upstairsDjBooth, upstairsDjSpeakers, upstairsDoor,
-  upstairsVideoWall, upstairsWallHeight } from './scene-data.ts'
+  upstairsRoofThickness, upstairsVideoWall, upstairsWallHeight } from './scene-data.ts'
 import { strobeTarget } from './strobe-object.ts'
 import type { Bounds, StrobeLight, Vec3, Vertex, VideoZone } from './types.ts'
 
@@ -219,7 +220,7 @@ function addUpstairsRoom(target: Vertex[], floor: number) {
   const wall: Vec3 = [0.16, 0.17, 0.18]
   const outsideWall: Vec3 = [0.003, 0.003, 0.004]
   const accent: Vec3 = [0.02, 0.62, 0.92]
-  const ceiling: Vec3 = [0.13, 0.14, 0.15]
+  const roof: Vec3 = [0.13, 0.14, 0.15]
   const left = roomBounds.left
   const right = roomBounds.right
   const back = roomBounds.back
@@ -233,8 +234,8 @@ function addUpstairsRoom(target: Vertex[], floor: number) {
   const coverBottom = floor + 0.14
   const coverTop = floor + upstairsDoor.height - 0.12
 
-  addBox(target, outsideRooftop.x, top + 0.04, outsideRooftop.z, outsideRooftop.width, 0.08, outsideRooftop.depth,
-    ceiling, 0)
+  addBox(target, outsideRooftop.x, top + upstairsRoofThickness / 2, outsideRooftop.z, outsideRooftop.width,
+    upstairsRoofThickness, outsideRooftop.depth, roof, 0)
   addBox(target, outsideRooftop.x, wallY, back - 0.06, outsideRooftop.width, upstairsWallHeight, 0.12, wall, 0)
   addBox(target, outsideRooftop.x, wallY, front + 0.06, outsideRooftop.width, upstairsWallHeight, 0.12, wall, 0)
   addBox(target, right + 0.06, wallY, outsideRooftop.z, 0.12, upstairsWallHeight, outsideRooftop.depth, wall, 0)
@@ -883,12 +884,12 @@ function addOpenAirHut(target: Vertex[], floor: number) {
   const right = outsideHut.x + outsideHut.width / 2
   const back = outsideHut.z - outsideHut.depth / 2
   const front = outsideHut.z + outsideHut.depth / 2
-  const eave = 0.48
+  const eave = outsideHutRoofEave
   const base = floor + outsideHutDeckHeight / 2
   const deckTop = floor + outsideHutDeckHeight
   const postTop = deckTop + 2.45
-  const ridge = deckTop + 3.8
-  const roofBottom = postTop + 0.08
+  const ridge = outsideHutRoofRidge
+  const roofBottom = outsideHutRoofBottom
   const ridgeZ = outsideHut.z
 
   addBox(target, outsideHut.x, base, outsideHut.z, outsideHut.width + 0.35, outsideHutDeckHeight, outsideHut.depth
